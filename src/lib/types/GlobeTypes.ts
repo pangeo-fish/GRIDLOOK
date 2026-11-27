@@ -48,7 +48,8 @@ export type TVarInfo = {
 
 export type TZarrDggsMetadata = {
   name: string;
-  refinement_level: number;
+  // null when the cell ids carry the level (zuniq, nuniq): cells of mixed levels
+  refinement_level: number | null;
   coordinate: string | null;
   compression?: string;
   indexing_scheme: IndexingScheme;

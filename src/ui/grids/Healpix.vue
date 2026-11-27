@@ -85,6 +85,12 @@ import {
 import type { THealpixBatch } from "@/lib/grids/healpixWorkerProtocol.ts";
 import { createSortedCells } from "@/lib/grids/sortedCells.ts";
 import {
+  createMixedLevelLookup,
+  mixedLevelScheme,
+  toZuniqIds,
+  type TMixedScheme,
+} from "@/lib/grids/zuniqCells.ts";
+import {
   createTriangleWrapProjectionGeometry,
   createWrappedProjectionMesh,
   setupProjectionGeometryWrap,
@@ -98,7 +104,11 @@ import {
   levelMaterial,
   makeGpuProjectedTextureMaterial,
 } from "@/lib/shaders/gridShaders.ts";
-import type { TDimensionRange, TSources } from "@/lib/types/GlobeTypes.ts";
+import type {
+  TDimensionRange,
+  TSources,
+  TZarrDggsMetadata,
+} from "@/lib/types/GlobeTypes.ts";
 import { VOLUME_GRID_TYPES } from "@/lib/volume/volumeGrid.ts";
 import { useUrlParameterStore } from "@/store/paramStore.ts";
 import {
@@ -203,6 +213,14 @@ let cellsReader:
 // The blocks loaded of a level too large to load whole; undefined when the
 // whole level is loaded.
 let loadedBlocks: number[] | undefined;
+
+// Cells of mixed levels (`refinement_level: null` with zuniq or nuniq ids): the
+// ids as zuniq, and where a point finds its cell. Drawn as one mesh of cells,
+// each at its own level, not as faces.
+let mixedScheme: TMixedScheme | null = null;
+let mixedCells:
+  | { ids: BigUint64Array; lookup: ReturnType<typeof createMixedLevelLookup> }
+  | undefined;
 
 let mainMeshes: Array<THREE.Mesh | undefined> = new Array(HEALPIX_NUMCHUNKS);
 
@@ -358,6 +376,14 @@ async function gridFromEasygemsConvention(
   return null;
 }
 
+function isMixedLevels(metadata: TZarrDggsMetadata) {
+  return (
+    mixedLevelScheme(metadata) !== null &&
+    metadata.compression !== "compacted" &&
+    metadata.compression !== "ranges"
+  );
+}
+
 async function gridFromDggsConvention(
   sources: TSources
 ): Promise<healpixGeo.Grid | null> {
@@ -366,6 +392,14 @@ async function gridFromDggsConvention(
     levelVariable(sources)
   );
   if (metadata !== null) {
+    if (isMixedLevels(metadata)) {
+      // the level is in the ids: the grid's own level is not used
+      return new healpixGeo.Grid({
+        scheme: "zuniq" as healpixGeo.IndexingScheme,
+        level: 0,
+        ellipsoid: coerceEllipsoid(metadata["ellipsoid"]),
+      });
+    }
     const level = coerceInteger(metadata["refinement_level"]);
     const scheme = coerceScheme(metadata["indexing_scheme"]);
     const ellipsoid = coerceEllipsoid(metadata["ellipsoid"]);
@@ -611,12 +645,43 @@ function readCells(
   return cellsReader.cells;
 }
 
+/** Read the ids of cells of mixed levels, and switch to drawing them. */
+async function prepareMixedLevels(
+  grid: healpixGeo.Grid,
+  cellCount: number,
+  scheme: TMixedScheme
+) {
+  const sources = props.datasources!;
+  const path = ZarrDataManager.resolveVariablePath(
+    varnameSelector.value,
+    await getCellCoordinateName(sources)
+  );
+  const raw = (await fetchHealpixVariableData([], path, sources)) as ArrayLike<
+    number | bigint
+  >;
+  if (raw.length !== cellCount) {
+    throw new Error(
+      `The cell coordinate has ${raw.length} cells, the data ${cellCount}.`
+    );
+  }
+  const ids = toZuniqIds(raw, scheme);
+  mixedCells?.lookup.dispose();
+  mixedCells = { ids, lookup: createMixedLevelLookup(grid, ids) };
+  mixedScheme = scheme;
+  healpixGrid.value = grid;
+  levelCellCount = cellCount;
+  levelWindowable = false;
+  sortedCells = undefined;
+  loadedBlocks = undefined;
+}
+
 /**
  * Read what the stored level allows: its grid, its size, and whether it can
  * be loaded by view (nested, in a pyramid with a coarsest level to draw
  * beneath, and either dense or with an ascending `cell` coordinate). Then
  * switch to it and to the blocks in view in one step.
  */
+// eslint-disable-next-line max-lines-per-function
 async function prepareLevel() {
   const sources = props.datasources!;
   const variable = varnameSelector.value;
@@ -626,6 +691,12 @@ async function prepareLevel() {
     variable
   );
   const cellCount = datavar.shape[datavar.shape.length - 1];
+  const metadata = await ZarrDataManager.getDggsMetadata(sources, variable);
+  if (metadata && isMixedLevels(metadata)) {
+    await prepareMixedLevels(grid, cellCount, mixedLevelScheme(metadata)!);
+    return;
+  }
+  mixedScheme = null;
   let windowable = false;
   let cells: TCellIndex | undefined;
   // A coordinate that says it is compressed but cannot be read is an error:
@@ -763,6 +834,24 @@ function createGeometry({
     new THREE.Float32BufferAttribute(latLonValues, 2)
   );
   return createTriangleWrapProjectionGeometry(geometry);
+}
+
+function fitCameraToMixedCells(grid: healpixGeo.Grid, ids: BigUint64Array) {
+  // the centres of the cells, as latitude and longitude
+  const centres = grid.healpixToLonLat(ids);
+  const latLon = new Float32Array(centres.length);
+  for (let at = 0; at < ids.length; at++) {
+    latLon[2 * at] = centres[2 * at + 1];
+    latLon[2 * at + 1] = centres[2 * at];
+  }
+  fitCameraToDataset([
+    {
+      geometry: new THREE.BufferGeometry().setAttribute(
+        "latLon",
+        new THREE.BufferAttribute(latLon, 2)
+      ),
+    },
+  ]);
 }
 
 function fitCameraToCells(grid: healpixGeo.Grid, cells: number[] | undefined) {
@@ -1146,6 +1235,77 @@ function updateHealpixTexture(batch: THealpixTexture, target = mainMeshes) {
     batch.dataRect.width < 1 || batch.dataRect.height < 1 ? 1 : 0;
 }
 
+function healpixBuildOptions(
+  grid: healpixGeo.Grid,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>
+) {
+  const helper = projectionHelper.value;
+  return {
+    grid: {
+      scheme: grid.scheme,
+      level: grid.level,
+      ellipsoid: {
+        // eslint-disable-next-line camelcase
+        semi_major_axis: grid.semiMajorAxis,
+        // eslint-disable-next-line camelcase
+        semi_minor_axis: grid.semiMajorAxis * (1 - grid.flattening),
+      },
+    },
+    attributes: datavar.attrs,
+    ...getHealpixMissingAndFillValues(datavar),
+    projectionType: helper.type,
+    projectionCenter: { lat: helper.center.lat, lon: helper.center.lon },
+  };
+}
+
+/** Cells of mixed levels: all of them in one batch, each drawn at its level. */
+async function processMixedCells(
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
+  indices: (number | zarr.Slice | null)[],
+  deferDisplay: boolean,
+  isCurrent: () => boolean
+) {
+  const { ids } = mixedCells!;
+  const selection = indices.slice();
+  selection[selection.length - 1] = zarr.slice(0, ids.length);
+  if (!deferDisplay) {
+    clearHoverLookup();
+  }
+  const data = castDataVarToFloat32(await fetchHealpixVariableData(selection));
+  if (disposed || !isCurrent()) {
+    return;
+  }
+  const batch = await buildHealpixFace({
+    ...healpixBuildOptions(unpackGrid(), datavar),
+    faceIndex: 0,
+    data,
+    zuniqCells: ids,
+  });
+  if (!isCurrent()) {
+    return;
+  }
+  const { min, max } = batch.histogramSummary;
+  if (!deferDisplay) {
+    updateHealpixBatch(batch);
+  }
+  return {
+    dataMin: min,
+    dataMax: max,
+    histogramSummaries: [batch.histogramSummary],
+    textures: [
+      {
+        batchIndex: batch.batchIndex,
+        dataValues: batch.dataValues,
+        width: batch.width,
+        height: batch.height,
+        dataRect: batch.dataRect,
+      },
+    ],
+    batches: deferDisplay ? [batch] : [],
+    covers: [] as ReturnType<typeof healpixFaceCover>[],
+  };
+}
+
 // eslint-disable-next-line max-lines-per-function
 async function processHealpixChunks(
   datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
@@ -1164,23 +1324,7 @@ async function processHealpixChunks(
   const textures: THealpixTexture[] = [];
   const batches: THealpixBatch[] = [];
   const covers: ReturnType<typeof healpixFaceCover>[] = [];
-  const helper = projectionHelper.value;
-  const options = {
-    grid: {
-      scheme: grid.scheme,
-      level: grid.level,
-      ellipsoid: {
-        // eslint-disable-next-line camelcase
-        semi_major_axis: grid.semiMajorAxis,
-        // eslint-disable-next-line camelcase
-        semi_minor_axis: grid.semiMajorAxis * (1 - grid.flattening),
-      },
-    },
-    attributes: datavar.attrs,
-    ...getHealpixMissingAndFillValues(datavar),
-    projectionType: helper.type,
-    projectionCenter: { lat: helper.center.lat, lon: helper.center.lon },
-  };
+  const options = healpixBuildOptions(grid, datavar);
   if (!deferDisplay) {
     clearHoverLookup();
   }
@@ -1422,6 +1566,34 @@ function openRgbVariable(variable: string) {
   );
 }
 
+function mixedHoverLookup(
+  grid: healpixGeo.Grid,
+  lat: number,
+  lon: number
+): TGridHoverLookupResult | null {
+  const mesh = mainMeshes[0];
+  const at = mixedCells?.lookup.find(
+    ProjectionHelper.normalizeLongitude(lon),
+    lat
+  );
+  if (!mesh || at === undefined) {
+    return null;
+  }
+  const texture = (mesh.material as THREE.ShaderMaterial).uniforms.data
+    .value as THREE.DataTexture;
+  const value = (texture.image.data as Float32Array)[at];
+  const centre = grid.healpixToLonLat(BigUint64Array.of(mixedCells!.ids[at]));
+  const isMissing = !Number.isFinite(value) || value === HEALPIX_UNSEEN;
+  return {
+    lat: centre[1],
+    lon: ProjectionHelper.normalizeLongitude(centre[0]),
+    value: isMissing ? null : value,
+    status: isMissing
+      ? HOVERED_GRID_POINT_STATUS.MISSING
+      : HOVERED_GRID_POINT_STATUS.VALUE,
+  };
+}
+
 function healpixHoverLookup(
   lat: number,
   lon: number
@@ -1431,6 +1603,9 @@ function healpixHoverLookup(
     grid = unpackGrid();
   } catch {
     return null;
+  }
+  if (mixedScheme) {
+    return mixedHoverLookup(grid, lat, lon);
   }
 
   const normalizedLon = ProjectionHelper.normalizeLongitude(lon);
@@ -1482,33 +1657,42 @@ async function fetchAndRenderData(
   const grid = unpackGrid();
 
   // A level loaded by view never reads its whole `cell` coordinate.
-  const cellCoord = loadedBlocks ? undefined : await getCells();
-  fitCameraToCells(grid, cellCoord);
+  const mixed = mixedScheme !== null;
+  const cellCoord = loadedBlocks || mixed ? undefined : await getCells();
+  if (mixed) {
+    fitCameraToMixedCells(grid, mixedCells!.ids);
+  } else {
+    fitCameraToCells(grid, cellCoord);
+  }
   const { dimensionRanges, indices } = await prepareDimensionData(datavar);
   // The backdrop (the coarsest level) is drawn and sets the range of every
   // level, unless each level is to take its own. One after the other: the
   // face worker runs a single build at a time.
-  const rangeSource = store.sharesLevelRange(datavar.attrs)
-    ? await loadBackdrop(indices, isCurrent).catch(() => undefined)
-    : undefined;
-  const result = await processHealpixChunks(
-    datavar,
-    cellCoord,
-    grid,
-    indices,
-    deferDisplay,
-    isCurrent
-  );
+  const rangeSource =
+    !mixed && store.sharesLevelRange(datavar.attrs)
+      ? await loadBackdrop(indices, isCurrent).catch(() => undefined)
+      : undefined;
+  const result = mixed
+    ? await processMixedCells(datavar, indices, deferDisplay, isCurrent)
+    : await processHealpixChunks(
+        datavar,
+        cellCoord,
+        grid,
+        indices,
+        deferDisplay,
+        isCurrent
+      );
   if (!result) {
     return;
   }
   const { dataMin, dataMax, histogramSummaries, textures, batches, covers } =
     result;
 
-  lastStreamlineContext = { indices, grid, cellCoord };
+  // streamlines and volumes do not read cells of mixed levels
+  lastStreamlineContext = mixed ? undefined : { indices, grid, cellCoord };
   lastDatavar = datavar;
   volume.setContext(
-    loadedBlocks
+    loadedBlocks || mixed
       ? undefined
       : {
           dimensionNames: selectedDimensionNames.value,
@@ -1588,7 +1772,9 @@ async function fetchAndRenderData(
     data: rangeSource?.histogramSummaries ?? histogramSummaries,
     isCurrent,
   });
-  await updateStreamlines(lastStreamlineContext);
+  if (lastStreamlineContext) {
+    await updateStreamlines(lastStreamlineContext);
+  }
   if (isCurrent() && !store.streamlineMagnitudeDisplayed) {
     await scalarCache.restoreScalar();
   }
@@ -1611,6 +1797,7 @@ onBeforeMount(async () => {
 
 onBeforeUnmount(() => {
   disposed = true;
+  mixedCells?.lookup.dispose();
   streamlineRequestRevision++;
   terminateHealpixWorker();
   terminateGridDataWorker();

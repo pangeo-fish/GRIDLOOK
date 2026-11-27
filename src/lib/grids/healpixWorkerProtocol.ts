@@ -17,6 +17,8 @@ export type THealpixBuildRequest = {
   faceIndex: number;
   data: Float32Array;
   cells?: number[];
+  // cells of mixed levels, as zuniq ids: one value per id, drawn at its own level
+  zuniqCells?: BigUint64Array;
   attributes: Attributes;
   missingValue: number;
   fillValue: number;

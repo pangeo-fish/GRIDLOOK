@@ -12,9 +12,18 @@ import type {
   THealpixWorkerRequest,
   THealpixWorkerResponse,
 } from "./healpixWorkerProtocol.ts";
+import {
+  buildMixedLevelGeometry,
+  buildMixedLevelTexture,
+  texelSize,
+  zuniqLevels,
+} from "./zuniqCells.ts";
 
 import { decodeVariableDataInPlace } from "@/lib/data/variableDecoding.ts";
 import { ProjectionHelper } from "@/lib/projection/projectionUtils.ts";
+
+// vertices per cell side of a mixed-level cell
+const MIXED_LEVEL_STEPS = 3;
 
 const workerScope = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -51,7 +60,10 @@ async function buildGrid(request: THealpixWorkerRequest) {
   if (!Number.isInteger(faceIndex) || faceIndex < 0 || faceIndex >= 12) {
     throw new Error("Invalid HEALPix face index.");
   }
-  if (data.length !== (request.cells?.length ?? grid.nside ** 2)) {
+  const mixed = request.zuniqCells;
+  if (
+    data.length !== (mixed?.length ?? request.cells?.length ?? grid.nside ** 2)
+  ) {
     throw new Error("HEALPix data length does not match the grid.");
   }
   decodeVariableDataInPlace(
@@ -69,20 +81,31 @@ async function buildGrid(request: THealpixWorkerRequest) {
     type: GridGeometryWorkerMessageType.METADATA,
     metadata: { totalBatches: 1 },
   });
-  const { dataValues, histogramSummary, width, height, dataRect } =
-    // Mesh only the data's extent: the same 65 steps then span a smaller area.
-    buildHealpixTexture(data, faceIndex, grid.nside, request.cells, {
-      cropDenseToData: true,
-    });
+  const size = texelSize(mixed?.length ?? 0);
+  const { dataValues, histogramSummary, width, height, dataRect } = mixed
+    ? buildMixedLevelTexture(data, zuniqLevels(mixed), size.width, size.height)
+    : // Mesh only the data's extent: the same 65 steps then span a smaller area.
+      buildHealpixTexture(data, faceIndex, grid.nside, request.cells, {
+        cropDenseToData: true,
+      });
   postBatch(requestId, {
     batchIndex: 0,
-    ...buildHealpixGeometry(
-      textureGrid,
-      BigInt(faceIndex),
-      65,
-      projection,
-      dataRect
-    ),
+    ...(mixed
+      ? buildMixedLevelGeometry(
+          grid,
+          mixed,
+          MIXED_LEVEL_STEPS,
+          projection,
+          size.width,
+          size.height
+        )
+      : buildHealpixGeometry(
+          textureGrid,
+          BigInt(faceIndex),
+          65,
+          projection,
+          dataRect
+        )),
     histogramSummary,
     width,
     height,
