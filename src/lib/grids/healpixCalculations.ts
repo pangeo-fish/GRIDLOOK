@@ -25,7 +25,10 @@ function distanceSquared(
   return (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1) + (z2 - z1) * (z2 - z1);
 }
 
-function generateHealpixIndices(positionValues: Float32Array, steps: number) {
+export function generateHealpixIndices(
+  positionValues: Float32Array,
+  steps: number
+) {
   const indices = [];
   for (let i = 0; i < steps - 1; ++i) {
     for (let j = 0; j < steps - 1; ++j) {
