@@ -1,0 +1,24 @@
+{
+  "type": "gridlook_catalog",
+  "title": "SHAD (Scheldt estuary), mixed-level HEALPix",
+  "datasets": [
+    {
+      "title": "SHAD leaf set: GEBCO depth (levels 11 to 15, 5577 cells)",
+      "description": "Leaves of the tidal Scheldt, the Westerschelde and the sea, one HEALPix cell per leaf at its own level (zuniq ids, refinement_level null). Depth from GEBCO 2024; the leaf set is derived from OpenStreetMap (ODbL 1.0). Also: wet_fraction, area_km2, is_river.",
+      "url": "data/A19845_leafset_canonical.zarr",
+      "params": "varname=depth_gebco_m",
+      "tags": {
+        "data": "leaf set"
+      }
+    },
+    {
+      "title": "SHAD posterior: hourly probability per leaf, sigma 20 km/day (863 hours)",
+      "description": "Hourly posterior probability of the position, one value per leaf (sums to 1 over the cells at each time), from 2023-05-03 11:00. Drag the time slider. Also posterior_s30 and posterior_s50.",
+      "url": "data/A19845_posterior_canonical.zarr",
+      "params": "varname=posterior_s20",
+      "tags": {
+        "data": "posterior"
+      }
+    }
+  ]
+}
