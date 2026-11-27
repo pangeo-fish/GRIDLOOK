@@ -799,9 +799,11 @@ useEventListener(window, "keydown", (e: KeyboardEvent) => {
       />
       <HoverReadout v-if="detectedGridType !== undefined" />
       <DistanceScale v-if="detectedGridType !== undefined" />
+      <!-- shown, not mounted, with the grid: a change of variable must not
+           read the series again -->
       <TimeSeriesPanel
-        v-if="detectedGridType !== undefined && !isDisplayMode"
-        v-show="!distractionFree"
+        v-if="!isDisplayMode"
+        v-show="detectedGridType !== undefined && !distractionFree"
         :datasources="datasources"
       />
       <BasemapAttribution v-if="detectedGridType !== undefined" />

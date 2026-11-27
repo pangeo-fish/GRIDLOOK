@@ -1,7 +1,6 @@
 <script lang="ts" setup>
-import { computedAsync } from "@vueuse/core";
 import { storeToRefs } from "pinia";
-import { computed, ref } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 
 import TimeSeriesChart from "./TimeSeriesChart.vue";
 
@@ -27,24 +26,48 @@ const { varinfo, dimSlidersDisplay, showDistanceScale } = storeToRefs(
 );
 
 // the variables of the dataset that are series along a time coordinate
-const series = computedAsync(async () => {
-  const datasources = props.datasources;
-  if (!datasources) {
-    return [];
+const names = computed(() =>
+  props.datasources
+    ? timeSeriesNames(currentLevel(props.datasources).datasources)
+    : []
+);
+
+// which arrays they are: the series are read again only when this changes,
+// not with every change inside the dataset (the level picked while zooming)
+const seriesKey = computed(() => {
+  if (!props.datasources) {
+    return "";
   }
-  const names = timeSeriesNames(currentLevel(datasources).datasources);
-  const loaded: TTimeSeries[] = [];
-  for (const result of await Promise.allSettled(
-    names.map((name) => loadTimeSeries(datasources, name))
-  )) {
-    if (result.status === "fulfilled") {
-      loaded.push(result.value);
-    } else {
-      logError(result.reason, "Couldn't load a time series");
+  const sources = currentLevel(props.datasources).datasources;
+  return names.value
+    .map((name) => `${sources[name].store}\n${sources[name].dataset}\n${name}`)
+    .join("\n\n");
+});
+
+// shallow: the points are plain data, far too many to make reactive
+const series = shallowRef<TTimeSeries[]>([]);
+
+watch(
+  seriesKey,
+  async (key) => {
+    const datasources = props.datasources;
+    const loaded: TTimeSeries[] = [];
+    for (const result of await Promise.allSettled(
+      names.value.map((name) => loadTimeSeries(datasources!, name))
+    )) {
+      if (result.status === "fulfilled") {
+        loaded.push(result.value);
+      } else {
+        logError(result.reason, "Couldn't load a time series");
+      }
     }
-  }
-  return loaded;
-}, []);
+    // another dataset may have been opened meanwhile
+    if (key === seriesKey.value) {
+      series.value = loaded;
+    }
+  },
+  { immediate: true }
+);
 
 // a record can be much longer than the period of the maps (a tag keeps
 // recording after the track ends): the charts show that period by default
@@ -107,6 +130,7 @@ const mapTime = computed(() => {
   z-index: 5;
 }
 
+/* clears the distance scale (DistanceScale.vue), drawn in the same corner */
 .time-series-panel.above-distance-scale {
   bottom: 84px;
 }

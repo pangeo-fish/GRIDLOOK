@@ -30,7 +30,7 @@ import {
   isReferenceStorePath,
   splitReferenceStoreAndGroup,
 } from "./referenceStore.ts";
-import { timeSeriesNames } from "./timeSeries.ts";
+import { hideTimeSeries } from "./timeSeries.ts";
 import { ZarrDataManager } from "./ZarrDataManager.ts";
 
 import trim from "@/utils/trim.ts";
@@ -306,12 +306,7 @@ async function processZarrVariables(
       ] as const;
     });
 
-  const datasources: Record<string, TDataSource> = Object.fromEntries(entries);
-  // a time series has no cells to draw: it is plotted in its own panel
-  for (const varname of timeSeriesNames(datasources)) {
-    datasources[varname] = { ...datasources[varname], hidden: true };
-  }
-  return datasources;
+  return Object.fromEntries(entries);
 }
 
 function createLevel(
@@ -325,6 +320,7 @@ function createLevel(
     source.groupAttrs = groupAttrs;
   }
   hideFormulaTermVariablesWithoutStandardName(datasources);
+  hideTimeSeries(datasources);
   const datasetSource = {
     store: src,
     dataset: datasetPath,
@@ -558,6 +554,7 @@ async function addVariablesWithoutLevels(
     source.groupAttrs = opened.attrs;
   }
   hideFormulaTermVariablesWithoutStandardName(others);
+  hideTimeSeries(others);
   for (const level of pyramid.levels) {
     Object.assign(level.datasources, others);
   }
@@ -860,6 +857,7 @@ async function enrichLevel(
     format = ZARR_FORMAT.V2;
   }
   hideFormulaTermVariablesWithoutStandardName(datasources);
+  hideTimeSeries(datasources);
   return format;
 }
 

@@ -11,7 +11,12 @@ import Annotation from "chartjs-plugin-annotation";
 import dayjs from "dayjs";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
-import { nearestPointIndex, type TTimeSeries } from "@/lib/data/timeSeries.ts";
+import {
+  nearestPointIndex,
+  pointsInRange,
+  timeTicks,
+  type TTimeSeries,
+} from "@/lib/data/timeSeries.ts";
 import { formatValue } from "@/utils/formatValue.ts";
 
 const props = defineProps<{
@@ -41,7 +46,8 @@ const units = computed(() =>
   props.series.units ? ` ${props.series.units}` : ""
 );
 
-// the value recorded nearest to the time shown, if the series covers it
+// the value recorded nearest to the time shown, if the series covers it.
+// ponytail: nearest however far; a record with long gaps shows a stale value
 const valueNow = computed(() => {
   const points = props.series.points;
   if (
@@ -52,19 +58,9 @@ const valueNow = computed(() => {
   ) {
     return undefined;
   }
-  return points[nearestPointIndex(points, props.now)].y;
+  const value = points[nearestPointIndex(points, props.now)].y;
+  return Number.isFinite(value) ? value : undefined;
 });
-
-/** At most `maxCount` ticks at 00:00 UTC, a whole number of days apart. */
-function dayTicks(min: number, max: number, maxCount = 5) {
-  const day = 86400000;
-  const step = Math.max(1, Math.ceil((max - min) / day / maxCount)) * day;
-  const ticks: { value: number }[] = [];
-  for (let value = Math.ceil(min / day) * day; value <= max; value += step) {
-    ticks.push({ value });
-  }
-  return ticks;
-}
 
 // the range asked for, unless it is empty or the series has nothing in it
 function timeBounds() {
@@ -93,16 +89,32 @@ function nowAnnotation(): Record<string, object> {
   };
 }
 
+const DAY = 86400000;
+
+// hours within a day, days otherwise, with the year over a long span
+function tickLabel(value: number, step: number, span: number) {
+  const time = dayjs.utc(value);
+  if (step < DAY && value % DAY !== 0) {
+    return time.format("HH:mm");
+  }
+  return time.format(span > 300 * DAY ? "DD MMM YY" : "DD MMM");
+}
+
 function createChart() {
+  chart?.destroy();
   if (!canvasRef.value) {
     return;
   }
+  const bounds = timeBounds();
+  const { step, ticks } = timeTicks(bounds.min, bounds.max);
   chart = new Chart(canvasRef.value, {
     type: "line",
     data: {
       datasets: [
         {
-          data: props.series.points,
+          // only the period shown: Chart.js keeps an element per point it
+          // is given whenever the decimation has nothing to remove
+          data: pointsInRange(props.series.points, bounds.min, bounds.max),
           borderColor: LINE_COLOR,
           borderWidth: 1,
           pointRadius: 0,
@@ -119,14 +131,14 @@ function createChart() {
       scales: {
         x: {
           type: "linear",
-          // the value axis then covers the values in this range only
-          ...timeBounds(),
+          ...bounds,
           // the linear scale would put the ticks at round milliseconds
           afterBuildTicks: (axis) => {
-            axis.ticks = dayTicks(axis.min, axis.max);
+            axis.ticks = ticks;
           },
           ticks: {
-            callback: (value) => dayjs.utc(Number(value)).format("DD MMM"),
+            callback: (value) =>
+              tickLabel(Number(value), step, bounds.max - bounds.min),
           },
         },
         y: { reverse: props.series.reversed, ticks: { maxTicksLimit: 4 } },
@@ -140,13 +152,18 @@ function createChart() {
   });
 }
 
+// another series or another period: a new chart
 watch(
-  () => [props.now, props.range],
+  [() => props.series, () => props.range?.[0], () => props.range?.[1]],
+  createChart
+);
+
+watch(
+  () => props.now,
   () => {
     if (!chart) {
       return;
     }
-    Object.assign(chart.options.scales!.x!, timeBounds());
     (
       chart.options.plugins as unknown as {
         annotation: { annotations: Record<string, object> };
