@@ -1,0 +1,408 @@
+{
+  "attributes": {
+    "zarr_conventions": [
+      {
+        "name": "dggs",
+        "schema_url": "https://raw.githubusercontent.com/zarr-conventions/dggs/refs/tags/v1/schema.json",
+        "spec_url": "https://github.com/zarr-conventions/dggs/blob/v1/README.md",
+        "uuid": "7b255807-140c-42ca-97f6-7a1cfecdbc38",
+        "description": "Discrete Global Grid Systems convention for zarr"
+      }
+    ],
+    "dggs": {
+      "name": "healpix",
+      "refinement_level": null,
+      "indexing_scheme": "zuniq",
+      "spatial_dimension": "cells",
+      "coordinate": "zuniq",
+      "compression": "none",
+      "ellipsoid": {
+        "name": "sphere",
+        "radius": 6370997.0
+      }
+    },
+    "description": "hourly posterior per leaf (probability, sums to 1 over cells), temperature evidence + end leaf (assumption); sigma 20/30/50 km/day",
+    "leaf_set_source": "data/multires/README.md (OSM, ODbL 1.0)",
+    "depth_source": "GEBCO 2024 grid (doi:10.5285/1c44ce99-0a0d-5f4f-e063-7086abc0ea0f), mean of the pixels in the leaf, NaN = land in GEBCO",
+    "balanced": "2:1, leaves do not overlap; absent leaf = land",
+    "posterior_note": "probability per leaf, sums to 1 over cells at each time; hourly posterior per leaf (probability, sums to 1 over cells), temperature evidence + end leaf (assumption); sigma 20/30/50 km/day"
+  },
+  "zarr_format": 3,
+  "consolidated_metadata": {
+    "kind": "inline",
+    "must_understand": false,
+    "metadata": {
+      "cell_ids": {
+        "shape": [
+          5577
+        ],
+        "data_type": "uint64",
+        "chunk_grid": {
+          "name": "regular",
+          "configuration": {
+            "chunk_shape": [
+              5577
+            ]
+          }
+        },
+        "chunk_key_encoding": {
+          "name": "default",
+          "configuration": {
+            "separator": "/"
+          }
+        },
+        "fill_value": 0,
+        "codecs": [
+          {
+            "name": "bytes",
+            "configuration": {
+              "endian": "little"
+            }
+          },
+          {
+            "name": "zstd",
+            "configuration": {
+              "level": 0,
+              "checksum": false
+            }
+          }
+        ],
+        "attributes": {
+          "long_name": "nested cell id at the leaf's own level"
+        },
+        "dimension_names": [
+          "cells"
+        ],
+        "zarr_format": 3,
+        "node_type": "array",
+        "storage_transformers": []
+      },
+      "level": {
+        "shape": [
+          5577
+        ],
+        "data_type": "uint8",
+        "chunk_grid": {
+          "name": "regular",
+          "configuration": {
+            "chunk_shape": [
+              5577
+            ]
+          }
+        },
+        "chunk_key_encoding": {
+          "name": "default",
+          "configuration": {
+            "separator": "/"
+          }
+        },
+        "fill_value": 0,
+        "codecs": [
+          {
+            "name": "bytes"
+          },
+          {
+            "name": "zstd",
+            "configuration": {
+              "level": 0,
+              "checksum": false
+            }
+          }
+        ],
+        "attributes": {
+          "long_name": "HEALPix refinement level of the leaf"
+        },
+        "dimension_names": [
+          "cells"
+        ],
+        "zarr_format": 3,
+        "node_type": "array",
+        "storage_transformers": []
+      },
+      "nuniq": {
+        "shape": [
+          5577
+        ],
+        "data_type": "uint64",
+        "chunk_grid": {
+          "name": "regular",
+          "configuration": {
+            "chunk_shape": [
+              5577
+            ]
+          }
+        },
+        "chunk_key_encoding": {
+          "name": "default",
+          "configuration": {
+            "separator": "/"
+          }
+        },
+        "fill_value": 0,
+        "codecs": [
+          {
+            "name": "bytes",
+            "configuration": {
+              "endian": "little"
+            }
+          },
+          {
+            "name": "zstd",
+            "configuration": {
+              "level": 0,
+              "checksum": false
+            }
+          }
+        ],
+        "attributes": {
+          "long_name": "HEALPix nuniq cell id"
+        },
+        "dimension_names": [
+          "cells"
+        ],
+        "zarr_format": 3,
+        "node_type": "array",
+        "storage_transformers": []
+      },
+      "posterior_s20": {
+        "shape": [
+          863,
+          5577
+        ],
+        "data_type": "float32",
+        "chunk_grid": {
+          "name": "regular",
+          "configuration": {
+            "chunk_shape": [
+              108,
+              5577
+            ]
+          }
+        },
+        "chunk_key_encoding": {
+          "name": "default",
+          "configuration": {
+            "separator": "/"
+          }
+        },
+        "fill_value": 0.0,
+        "codecs": [
+          {
+            "name": "bytes",
+            "configuration": {
+              "endian": "little"
+            }
+          },
+          {
+            "name": "zstd",
+            "configuration": {
+              "level": 0,
+              "checksum": false
+            }
+          }
+        ],
+        "attributes": {
+          "coordinates": "zuniq",
+          "long_name": "posterior probability, sigma 20 km/day"
+        },
+        "dimension_names": [
+          "time",
+          "cells"
+        ],
+        "zarr_format": 3,
+        "node_type": "array",
+        "storage_transformers": []
+      },
+      "posterior_s30": {
+        "shape": [
+          863,
+          5577
+        ],
+        "data_type": "float32",
+        "chunk_grid": {
+          "name": "regular",
+          "configuration": {
+            "chunk_shape": [
+              108,
+              5577
+            ]
+          }
+        },
+        "chunk_key_encoding": {
+          "name": "default",
+          "configuration": {
+            "separator": "/"
+          }
+        },
+        "fill_value": 0.0,
+        "codecs": [
+          {
+            "name": "bytes",
+            "configuration": {
+              "endian": "little"
+            }
+          },
+          {
+            "name": "zstd",
+            "configuration": {
+              "level": 0,
+              "checksum": false
+            }
+          }
+        ],
+        "attributes": {
+          "coordinates": "zuniq",
+          "long_name": "posterior probability, sigma 30 km/day"
+        },
+        "dimension_names": [
+          "time",
+          "cells"
+        ],
+        "zarr_format": 3,
+        "node_type": "array",
+        "storage_transformers": []
+      },
+      "posterior_s50": {
+        "shape": [
+          863,
+          5577
+        ],
+        "data_type": "float32",
+        "chunk_grid": {
+          "name": "regular",
+          "configuration": {
+            "chunk_shape": [
+              108,
+              5577
+            ]
+          }
+        },
+        "chunk_key_encoding": {
+          "name": "default",
+          "configuration": {
+            "separator": "/"
+          }
+        },
+        "fill_value": 0.0,
+        "codecs": [
+          {
+            "name": "bytes",
+            "configuration": {
+              "endian": "little"
+            }
+          },
+          {
+            "name": "zstd",
+            "configuration": {
+              "level": 0,
+              "checksum": false
+            }
+          }
+        ],
+        "attributes": {
+          "coordinates": "zuniq",
+          "long_name": "posterior probability, sigma 50 km/day"
+        },
+        "dimension_names": [
+          "time",
+          "cells"
+        ],
+        "zarr_format": 3,
+        "node_type": "array",
+        "storage_transformers": []
+      },
+      "time": {
+        "shape": [
+          863
+        ],
+        "data_type": "int64",
+        "chunk_grid": {
+          "name": "regular",
+          "configuration": {
+            "chunk_shape": [
+              863
+            ]
+          }
+        },
+        "chunk_key_encoding": {
+          "name": "default",
+          "configuration": {
+            "separator": "/"
+          }
+        },
+        "fill_value": 0,
+        "codecs": [
+          {
+            "name": "bytes",
+            "configuration": {
+              "endian": "little"
+            }
+          },
+          {
+            "name": "zstd",
+            "configuration": {
+              "level": 0,
+              "checksum": false
+            }
+          }
+        ],
+        "attributes": {
+          "units": "hours since 2023-05-03 11:00:00",
+          "calendar": "proleptic_gregorian"
+        },
+        "dimension_names": [
+          "time"
+        ],
+        "zarr_format": 3,
+        "node_type": "array",
+        "storage_transformers": []
+      },
+      "zuniq": {
+        "shape": [
+          5577
+        ],
+        "data_type": "uint64",
+        "chunk_grid": {
+          "name": "regular",
+          "configuration": {
+            "chunk_shape": [
+              5577
+            ]
+          }
+        },
+        "chunk_key_encoding": {
+          "name": "default",
+          "configuration": {
+            "separator": "/"
+          }
+        },
+        "fill_value": 0,
+        "codecs": [
+          {
+            "name": "bytes",
+            "configuration": {
+              "endian": "little"
+            }
+          },
+          {
+            "name": "zstd",
+            "configuration": {
+              "level": 0,
+              "checksum": false
+            }
+          }
+        ],
+        "attributes": {
+          "long_name": "HEALPix zuniq cell id (level encoded in the id)"
+        },
+        "dimension_names": [
+          "cells"
+        ],
+        "zarr_format": 3,
+        "node_type": "array",
+        "storage_transformers": []
+      }
+    }
+  },
+  "node_type": "group"
+}

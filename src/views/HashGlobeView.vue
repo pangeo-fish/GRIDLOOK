@@ -16,13 +16,16 @@ import type { TURLParameterValues } from "@/utils/urlParams.ts";
 
 type TParams = Partial<Record<TURLParameterValues, string>>;
 
-// GRID4EARTH: global ERA5 on HEALPix (WGS84 ellipsoid), also in the catalog below
-const DEFAULT_DATASET =
-  "https://data.grid4earth.eu/auxiliary/reanalysis-era5-complete/S00__ADF_ECMWA_20180504T210000_20180504T210000_20260619T111831.zarr";
-const DEFAULT_VARNAME = "measurements/enda/t2m";
+// PANGEO_FISH: the SHAD leaf set (mixed-level HEALPix cells, Scheldt estuary),
+// served from this site; relative to the page, so any base path works
+const DEFAULT_DATASET = new URL(
+  "data/A19845_leafset_canonical.zarr",
+  document.baseURI
+).href;
+const DEFAULT_VARNAME = "depth_gebco_m";
 
-// GRID4EARTH: written by `stac-scraper gridlook-catalog` with the STAC metadata
-const DEFAULT_CATALOG = "https://data.grid4earth.eu/gridlook-catalog.json";
+// the SHAD datasets of the "Open dataset" list
+const DEFAULT_CATALOG = "static/gridlook-catalog.json";
 const DEFAULT_BASEMAP_CATALOG = "static/basemaps.json";
 
 const defaultSrc = ref(DEFAULT_DATASET);
@@ -33,13 +36,19 @@ const store = useGlobeControlStore();
 
 const urlParameterStore = useUrlParameterStore();
 
-// GRID4EARTH: without a hash, open the default dataset on its default variable
+// PANGEO_FISH: without a hash, open the default dataset on its default variable
 const openDefaultDataset = () => {
   store.catalogUrl = DEFAULT_CATALOG;
   store.basemapCatalogUrl = DEFAULT_BASEMAP_CATALOG;
   urlParameterStore.paramVarname = DEFAULT_VARNAME;
   src.value = defaultSrc.value;
 };
+
+// PANGEO_FISH: a link to a dataset of this site is relative to the page
+const resolveResource = (resource: string) =>
+  resource && !/^[a-z][a-z0-9+.-]*:/i.test(resource)
+    ? new URL(resource, document.baseURI).href
+    : resource;
 
 const onHashChange = () => {
   if (location.hash.length > 1) {
@@ -88,7 +97,7 @@ const onHashChange = () => {
       params.value.maskmode,
       params.value.maskusetexture
     );
-    src.value = resource || defaultSrc.value;
+    src.value = resolveResource(resource) || defaultSrc.value;
     store.catalogUrl = params.value.catalog || DEFAULT_CATALOG;
     store.basemapCatalogUrl =
       params.value.basemapcatalog || DEFAULT_BASEMAP_CATALOG;

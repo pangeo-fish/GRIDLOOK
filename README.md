@@ -1,3 +1,23 @@
+# GRIDLOOK (PANGEO_FISH): SHAD demo
+
+A build of [Gridlook](https://github.com/d70-t/gridlook) that opens HEALPix cells of **mixed levels**
+(the dggs convention with `refinement_level: null` and `zuniq` cell ids), with the SHAD (Scheldt estuary)
+results as demo data. Opened without a link it shows the leaf set; "Open dataset" lists both datasets.
+
+| dataset | what | size |
+|---|---|---|
+| `public/data/A19845_leafset_canonical.zarr` | 5577 leaves, levels 11 to 15, one `cells` dimension: GEBCO depth (`depth_gebco_m`), `wet_fraction`, `area_km2`, `is_river` | 172 KB |
+| `public/data/A19845_posterior_canonical.zarr` | hourly posterior probability per leaf (863 hours from 2023-05-03 11:00, sigma 20, 30 and 50 km/day), one chunk of 108 hours | 50 MB |
+
+Sources: the leaf set is derived from OpenStreetMap data (ODbL 1.0); the depth is the mean of the
+GEBCO 2024 grid pixels in each leaf (doi:10.5285/1c44ce99-0a0d-5f4f-e063-7086abc0ea0f). The datasets are
+served from this site; the list is `public/static/gridlook-catalog.json`.
+
+Source of the viewer: Gridlook (MIT) at the preview source of GRID4EARTH (`preview-source-2026-11-13`),
+plus the mixed-level cells (3 commits and a fix) and the SHAD defaults. Build: `npm ci && npm run build`.
+
+---
+
 # gridlook
 
 Gridlook is a WebGL-based viewer for Earth system model (ESM) output. It supports cloud-hosted Zarr, Icechunk and NetCDF datasets, as well as local Zarr stores and local NetCDF files opened directly from your file system.
