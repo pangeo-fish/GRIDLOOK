@@ -9,9 +9,6 @@ import {
   type THistogramSummary,
 } from "@/utils/histogram.ts";
 
-/** The largest relative cell area drawn, as a power of 4 (keeps bins in uint32). */
-const MAX_WEIGHT_EXPONENT = 10;
-
 /**
  * How far a patch grows past its cell, as a fraction of the cell, so that
  * neighbouring patches overlap by a hair: the corners they share are
@@ -104,8 +101,11 @@ export function overlapped(coords: Float64Array, grow = PATCH_OVERLAP) {
     const lon =
       lon0 + centreLon + (relative(coords[2 * at]) - centreLon) * (1 + grow);
     grown[2 * at] = ((lon + 540) % 360) - 180;
-    grown[2 * at + 1] =
-      centreLat + (coords[2 * at + 1] - centreLat) * (1 + grow);
+    // a vertex at a pole must not be pushed past it
+    grown[2 * at + 1] = Math.max(
+      -90,
+      Math.min(90, centreLat + (coords[2 * at + 1] - centreLat) * (1 + grow))
+    );
   }
   return grown;
 }
@@ -178,23 +178,32 @@ export function buildMixedLevelTexture(
     }
   }
   const finest = levels.reduce((a, b) => Math.max(a, b), 0);
-  const bins = new Uint32Array(HISTOGRAM_SUMMARY_BINS);
+  // area weights sum past 2**32 for a few cells of level 5 next to level 15:
+  // add up in doubles, then scale into the uint32 bins
+  const weighted = new Float64Array(HISTOGRAM_SUMMARY_BINS);
   if (Number.isFinite(min)) {
-    const binSize = (max - min) / bins.length;
+    const binSize = (max - min) / weighted.length;
     for (let at = 0; at < data.length; at++) {
       if (!Number.isFinite(data[at])) {
         continue;
       }
       const bin =
         max === min
-          ? bins.length >> 1
-          : Math.min(bins.length - 1, Math.floor((data[at] - min) / binSize));
-      // ponytail: levels more than MAX_WEIGHT_EXPONENT apart share a cap
-      bins[bin] += 4 ** Math.min(finest - levels[at], MAX_WEIGHT_EXPONENT);
+          ? weighted.length >> 1
+          : Math.min(
+              weighted.length - 1,
+              Math.floor((data[at] - min) / binSize)
+            );
+      weighted[bin] += 4 ** (finest - levels[at]);
     }
   } else {
     min = max = NaN;
   }
+  const heaviest = weighted.reduce((a, b) => Math.max(a, b), 0);
+  const scale = heaviest > 0xffffffff ? 0xffffffff / heaviest : 1;
+  const bins = Uint32Array.from(weighted, (weight) =>
+    Math.round(weight * scale)
+  );
   const histogramSummary: THistogramSummary = { bins, min, max };
   return {
     dataValues,

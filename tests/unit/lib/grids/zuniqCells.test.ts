@@ -157,3 +157,44 @@ it("grows a patch a hair past its cell, about its centre, also on the date line"
   expect(wrapped[0]).toBeCloseTo(178.99, 9);
   expect(wrapped[2 * 8]).toBeCloseTo(-178.99, 9);
 });
+
+it("keeps the area weighted histogram whole when the weights sum past 2**32", () => {
+  // 5000 cells of level 5 weigh 4 ** 10 each next to one cell of level 15
+  const levels = new Uint8Array(5001).fill(5);
+  levels[5000] = 15;
+  const data = new Float32Array(5001).fill(1);
+  data[5000] = 2;
+  const { histogramSummary } = buildMixedLevelTexture(data, levels, 2048, 3);
+  const bins = histogramSummary.bins;
+  // the heavy bin is the one that holds the level-5 cells, and it is not a wrapped number
+  expect(bins[0]).toBe(0xffffffff);
+  // the single level-15 cell weighs 1 of 5000 * 4 ** 10 + 1: it rounds to 1 or 0, never more
+  expect(bins[bins.length - 1]).toBeLessThanOrEqual(1);
+});
+
+it("does not push a vertex past a pole", () => {
+  // a patch whose first vertex sits on the pole
+  const coords = Float64Array.of(
+    0,
+    90,
+    10,
+    80,
+    20,
+    70,
+    0,
+    90,
+    10,
+    80,
+    20,
+    70,
+    0,
+    90,
+    10,
+    80,
+    20,
+    70
+  );
+  for (let at = 0; at < 9; at++) {
+    expect(overlapped(coords, 0.01)[2 * at + 1]).toBeLessThanOrEqual(90);
+  }
+});

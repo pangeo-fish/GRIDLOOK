@@ -665,8 +665,13 @@ async function prepareMixedLevels(
     );
   }
   const ids = toZuniqIds(raw, scheme);
+  const lookup = createMixedLevelLookup(grid, ids);
+  if (disposed) {
+    lookup.dispose();
+    return;
+  }
   mixedCells?.lookup.dispose();
-  mixedCells = { ids, lookup: createMixedLevelLookup(grid, ids) };
+  mixedCells = { ids, lookup };
   mixedScheme = scheme;
   healpixGrid.value = grid;
   levelCellCount = cellCount;
@@ -697,6 +702,8 @@ async function prepareLevel() {
     return;
   }
   mixedScheme = null;
+  mixedCells?.lookup.dispose();
+  mixedCells = undefined;
   let windowable = false;
   let cells: TCellIndex | undefined;
   // A coordinate that says it is compressed but cannot be read is an error:
@@ -837,6 +844,9 @@ function createGeometry({
 }
 
 function fitCameraToMixedCells(grid: healpixGeo.Grid, ids: BigUint64Array) {
+  if (ids.length === 0) {
+    return;
+  }
   // the centres of the cells, as latitude and longitude
   const centres = grid.healpixToLonLat(ids);
   const latLon = new Float32Array(centres.length);
