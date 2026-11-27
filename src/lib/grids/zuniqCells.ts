@@ -12,6 +12,14 @@ import {
 /** The largest relative cell area drawn, as a power of 4 (keeps bins in uint32). */
 const MAX_WEIGHT_EXPONENT = 10;
 
+/**
+ * How far a patch grows past its cell, as a fraction of the cell, so that
+ * neighbouring patches overlap by a hair: the corners they share are
+ * computed apart and can differ by a float32 step, which leaves a gap of a
+ * pixel at most where the patches should meet.
+ */
+const PATCH_OVERLAP = 1e-3;
+
 export type TMixedScheme = "zuniq" | "nuniq";
 
 /**
@@ -78,6 +86,30 @@ export function texelSize(count: number, maxWidth = 2048) {
   return { width, height: Math.max(1, Math.ceil(count / width)) };
 }
 
+/** The vertices (longitude, latitude pairs) grown about their centre. */
+export function overlapped(coords: Float64Array, grow = PATCH_OVERLAP) {
+  const count = coords.length / 2;
+  // longitudes relative to the first vertex, so that a cell on the date line
+  // is not torn apart
+  const lon0 = coords[0];
+  const relative = (lon: number) => ((lon - lon0 + 540) % 360) - 180;
+  let centreLon = 0;
+  let centreLat = 0;
+  for (let at = 0; at < count; at++) {
+    centreLon += relative(coords[2 * at]) / count;
+    centreLat += coords[2 * at + 1] / count;
+  }
+  const grown = new Float64Array(coords.length);
+  for (let at = 0; at < count; at++) {
+    const lon =
+      lon0 + centreLon + (relative(coords[2 * at]) - centreLon) * (1 + grow);
+    grown[2 * at] = ((lon + 540) % 360) - 180;
+    grown[2 * at + 1] =
+      centreLat + (coords[2 * at + 1] - centreLat) * (1 + grow);
+  }
+  return grown;
+}
+
 /**
  * One `steps` x `steps` patch per cell, each cell at its own level. Every
  * vertex of a cell carries the uv of the cell's texel, so that the cell takes
@@ -97,7 +129,7 @@ export function buildMixedLevelGeometry(
   const latLonValues = new Float32Array(ids.length * perCell * 2);
   const indices = new Uint32Array(ids.length * (steps - 1) ** 2 * 6);
   for (let cell = 0; cell < ids.length; cell++) {
-    const coords = grid.vertices(ids[cell], steps);
+    const coords = overlapped(grid.vertices(ids[cell], steps));
     const u = ((cell % width) + 0.5) / width;
     const v = (Math.floor(cell / width) + 0.5) / height;
     for (let at = 0; at < perCell; at++) {

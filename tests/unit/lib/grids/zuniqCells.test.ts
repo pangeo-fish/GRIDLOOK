@@ -9,6 +9,7 @@ import {
   createMixedLevelLookup,
   decodeNuniq,
   mixedLevelScheme,
+  overlapped,
   texelSize,
   toZuniqIds,
   zuniqLevels,
@@ -127,4 +128,32 @@ it("builds cells of each level at their own place and finds them by point", () =
   expect(lookup.find(3.0, 51.5)).toBe(1);
   expect(lookup.find(10, 10)).toBeUndefined();
   lookup.dispose();
+});
+
+it("grows a patch a hair past its cell, about its centre, also on the date line", () => {
+  // a 3 x 3 patch of 2 degrees, centred on 10 E / 20 N
+  const coords = new Float64Array(18);
+  for (let at = 0; at < 9; at++) {
+    coords[2 * at] = 9 + (at % 3);
+    coords[2 * at + 1] = 19 + Math.floor(at / 3);
+  }
+  const grown = overlapped(coords, 0.01);
+  expect(grown[2 * 4]).toBeCloseTo(10, 12);
+  expect(grown[2 * 4 + 1]).toBeCloseTo(20, 12);
+  expect(grown[0]).toBeCloseTo(10 - 1.01, 12);
+  expect(grown[1]).toBeCloseTo(20 - 1.01, 12);
+  expect(grown[2 * 8]).toBeCloseTo(10 + 1.01, 12);
+
+  // the same patch across the date line stays one patch
+  const across = new Float64Array(18);
+  for (let at = 0; at < 9; at++) {
+    const lon = 179 + (at % 3);
+    across[2 * at] = lon > 180 ? lon - 360 : lon;
+    across[2 * at + 1] = 19 + Math.floor(at / 3);
+  }
+  const wrapped = overlapped(across, 0.01);
+  // 180 and -180 are the same meridian
+  expect(Math.abs(Math.abs(wrapped[2 * 4]) - 180)).toBeLessThan(1e-9);
+  expect(wrapped[0]).toBeCloseTo(178.99, 9);
+  expect(wrapped[2 * 8]).toBeCloseTo(-178.99, 9);
 });
