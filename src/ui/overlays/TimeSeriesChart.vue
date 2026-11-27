@@ -18,6 +18,8 @@ const props = defineProps<{
   series: TTimeSeries;
   // epoch milliseconds of the time shown on the globe
   now?: number;
+  // first and last time to show; the whole series when unset
+  range?: [number, number];
 }>();
 
 Chart.register(
@@ -64,6 +66,17 @@ function dayTicks(min: number, max: number, maxCount = 5) {
   return ticks;
 }
 
+// the range asked for, unless it is empty or the series has nothing in it
+function timeBounds() {
+  const points = props.series.points;
+  const first = points[0]?.x;
+  const last = points[points.length - 1]?.x;
+  const [min, max] = props.range ?? [first, last];
+  return min < max && min < last && max > first
+    ? { min, max }
+    : { min: first, max: last };
+}
+
 function nowAnnotation(): Record<string, object> {
   if (props.now === undefined) {
     return {};
@@ -84,13 +97,12 @@ function createChart() {
   if (!canvasRef.value) {
     return;
   }
-  const points = props.series.points;
   chart = new Chart(canvasRef.value, {
     type: "line",
     data: {
       datasets: [
         {
-          data: points,
+          data: props.series.points,
           borderColor: LINE_COLOR,
           borderWidth: 1,
           pointRadius: 0,
@@ -107,8 +119,8 @@ function createChart() {
       scales: {
         x: {
           type: "linear",
-          min: points[0]?.x,
-          max: points[points.length - 1]?.x,
+          // the value axis then covers the values in this range only
+          ...timeBounds(),
           // the linear scale would put the ticks at round milliseconds
           afterBuildTicks: (axis) => {
             axis.ticks = dayTicks(axis.min, axis.max);
@@ -129,11 +141,12 @@ function createChart() {
 }
 
 watch(
-  () => props.now,
+  () => [props.now, props.range],
   () => {
     if (!chart) {
       return;
     }
+    Object.assign(chart.options.scales!.x!, timeBounds());
     (
       chart.options.plugins as unknown as {
         annotation: { annotations: Record<string, object> };

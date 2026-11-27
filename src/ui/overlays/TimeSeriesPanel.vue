@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computedAsync } from "@vueuse/core";
 import { storeToRefs } from "pinia";
-import { computed } from "vue";
+import { computed, ref } from "vue";
 
 import TimeSeriesChart from "./TimeSeriesChart.vue";
 
@@ -46,8 +46,13 @@ const series = computedAsync(async () => {
   return loaded;
 }, []);
 
-// the time shown on the globe, in epoch milliseconds
-const now = computed(() => {
+// a record can be much longer than the period of the maps (a tag keeps
+// recording after the track ends): the charts show that period by default
+const wholeRecord = ref(false);
+
+// the time shown on the globe and the first and last time of the maps, in
+// epoch milliseconds
+const mapTime = computed(() => {
   const dimInfo = varinfo.value?.dimInfo ?? [];
   for (let i = 0; i < dimInfo.length; i++) {
     const info = dimInfo[i];
@@ -58,7 +63,12 @@ const now = computed(() => {
       typeof index === "number" &&
       index < info.values.length
     ) {
-      return decodeTime(info.values[index], info.attrs).valueOf();
+      const timeAt = (at: number) =>
+        decodeTime(info.values[at], info.attrs).valueOf();
+      return {
+        now: timeAt(index),
+        range: [timeAt(0), timeAt(info.values.length - 1)] as [number, number],
+      };
     }
   }
   return undefined;
@@ -76,8 +86,13 @@ const now = computed(() => {
         v-for="item in series"
         :key="item.name"
         :series="item"
-        :now="now"
+        :now="mapTime?.now"
+        :range="wholeRecord ? undefined : mapTime?.range"
       />
+      <label class="checkbox is-size-7 px-2">
+        <input v-model="wholeRecord" type="checkbox" />
+        Whole record
+      </label>
     </CollapsibleCard>
   </div>
   <div v-else />
