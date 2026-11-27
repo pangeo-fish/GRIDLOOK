@@ -30,6 +30,7 @@ import {
   isReferenceStorePath,
   splitReferenceStoreAndGroup,
 } from "./referenceStore.ts";
+import { timeSeriesNames } from "./timeSeries.ts";
 import { ZarrDataManager } from "./ZarrDataManager.ts";
 
 import trim from "@/utils/trim.ts";
@@ -305,7 +306,12 @@ async function processZarrVariables(
       ] as const;
     });
 
-  return Object.fromEntries(entries);
+  const datasources: Record<string, TDataSource> = Object.fromEntries(entries);
+  // a time series has no cells to draw: it is plotted in its own panel
+  for (const varname of timeSeriesNames(datasources)) {
+    datasources[varname] = { ...datasources[varname], hidden: true };
+  }
+  return datasources;
 }
 
 function createLevel(
