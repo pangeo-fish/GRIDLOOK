@@ -88,6 +88,7 @@ import GlobeControls from "@/ui/overlays/Controls.vue";
 import DistanceScale from "@/ui/overlays/DistanceScale.vue";
 import HoverReadout from "@/ui/overlays/HoverReadout.vue";
 import InfoPanel from "@/ui/overlays/InfoPanel.vue";
+import TimeSeriesPanel from "@/ui/overlays/TimeSeriesPanel.vue";
 
 const props = defineProps<{ src: string }>();
 
@@ -798,6 +799,13 @@ useEventListener(window, "keydown", (e: KeyboardEvent) => {
       />
       <HoverReadout v-if="detectedGridType !== undefined" />
       <DistanceScale v-if="detectedGridType !== undefined" />
+      <!-- shown, not mounted, with the grid: a change of variable must not
+           read the series again -->
+      <TimeSeriesPanel
+        v-if="!isDisplayMode"
+        v-show="detectedGridType !== undefined && !distractionFree"
+        :datasources="datasources"
+      />
       <BasemapAttribution v-if="detectedGridType !== undefined" />
     </div>
     <div
